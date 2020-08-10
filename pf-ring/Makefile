@@ -4,11 +4,8 @@ SRCS :=		plugin.c \
 		source-pfring.c \
 		runmode-pfring.c
 
-# This needs to point to the Suricata include directory.
-CPPFLAGS +=	-I/usr/local/include/suricata
-
+CPPFLAGS +=	-DSURICATA_PLUGIN -DHAVE_CONFIG_H -I.
 CPPFLAGS +=	-DHAVE_PF_RING_FLOW_OFFLOAD
-CPPFLAGS +=	-DSURICATA_PLUGIN -I. 
 
 all:
 	$(CC) -fPIC $(CPPFLAGS) -o $(NAME).so -shared $(SRCS)

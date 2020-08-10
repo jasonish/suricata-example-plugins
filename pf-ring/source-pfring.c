@@ -28,17 +28,14 @@
  * \todo Allow ring options such as snaplen etc, to be user configurable.
  */
 
-#undef ENABLE_PROFILING
+//#undef ENABLE_PROFILING
 
-#include <stdint.h>
-#include <stdbool.h>
-
+#include "suricata-common.h"
 #include "suricata-plugin.h"
-
-/* #include "suricata-common.h" */
 
 #include "suricata.h"
 #include "conf.h"
+#include "flow.h"
 #include "decode.h"
 #include "packet-queue.h"
 #include "threads.h"
@@ -52,9 +49,6 @@
 #include "util-device.h"
 #include "util-host-info.h"
 #include "runmodes.h"
-#ifdef ENABLE_PROFILING
-#include "util-profiling.h"
-#endif
 
 TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot);
 TmEcode PfringPluginBreakLoop(ThreadVars *tv, void *data);

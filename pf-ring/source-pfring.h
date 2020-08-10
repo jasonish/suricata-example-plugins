@@ -26,10 +26,6 @@
 
 #define PFRING_IFACE_NAME_LENGTH 48
 
-#include "decode.h"
-
-#include <autoconf.h>
-
 typedef struct PfringPluginThreadVars_ PfringPluginThreadVars;
 
 /* PfringPluginIfaceConfig flags */

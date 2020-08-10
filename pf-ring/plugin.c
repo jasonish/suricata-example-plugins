@@ -1,5 +1,7 @@
+#include "suricata-common.h"
 #include "suricata-plugin.h"
 
+#include "decode.h"
 #include "source-pfring.h"
 #include "runmode-pfring.h"
 #include "util-device.h"

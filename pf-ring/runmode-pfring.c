@@ -15,12 +15,10 @@
  * 02110-1301, USA.
  */
 
-#include "stdint.h"
-#include "stdbool.h"
-
+#include "suricata-common.h"
 #include "suricata-plugin.h"
 
-/* #include "suricata-common.h" */
+#include "flow.h"
 #include "tm-threads.h"
 #include "conf.h"
 #include "runmodes.h"
