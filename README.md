@@ -12,5 +12,5 @@ The PF_RING plugin is an example of a plugin implementing a capture source.
 
 To build a plugin, go into the plugin directory and execute make like:
 ```
-CPPFLAGS="-I/path/to/suricata/includes" make
+CPPFLAGS="-I/path/to/suricata/src" make
 ```
