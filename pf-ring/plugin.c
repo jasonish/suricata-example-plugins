@@ -6,7 +6,7 @@
 #include "runmode-pfring.h"
 #include "util-device.h"
 
-static char *source_name = "pfring-plugin";
+static char *source_name = "pfring";
 
 void InitCapturePlugin(const char *args, int plugin_slot, int receive_slot, int decode_slot)
 {
@@ -29,9 +29,14 @@ void SCPluginInit(void)
     SCPluginRegisterCapture(plugin);
 }
 
-const SCPlugin PluginSpec = {
+const SCPlugin PluginRegistration = {
     .name = "pfring-plugin",
     .author = "Some Developer",
     .license = "GPLv2",
     .Init = SCPluginInit,
 };
+
+const SCPlugin *SCPluginRegister()
+{
+    return &PluginRegistration;
+}
