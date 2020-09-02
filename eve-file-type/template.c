@@ -50,9 +50,14 @@ void TemplateInit(void)
     }
 }
 
-const SCPlugin PluginSpec = {
+const SCPlugin PluginRegistration = {
     .name = OUTPUT_NAME,
     .author = "Some Developer",
     .license = "GPLv2",
     .Init = TemplateInit,
 };
+
+const SCPlugin *SCPluginRegister()
+{
+    return &PluginRegistration;
+}
