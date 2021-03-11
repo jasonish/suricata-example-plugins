@@ -1,8 +1,8 @@
 SRCS :=		template.c
 
-# This needs to point to the Suricata includes.
-CPPFLAGS +=	-I/usr/local/include/suricata
+LIBSURICATA_CONFIG ?= libsuricata-config
 
+CPPFLAGS +=	`$(LIBSURICATA_CONFIG) --cflags`
 CPPFLAGS +=	-DSURICATA_PLUGIN -I.
 
 all:
