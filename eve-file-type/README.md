@@ -1,22 +1,27 @@
-EVE plugin for Suricata 6.0 (and above)
-=======================================
+# EVE plugin for Suricata 7.0.x
 
 This is an example EVE plugin for Suricata.
 
 ## Building
 
-To build this plugin you will first need to build Suricata from source
-(or use git master).
+To build this plugin you will first need to have the Suricata
+development headers and libraries installed. At the time of this
+writing this means building Suricata from source and running:
+- `make install-headers`
+- `make install-library`
 
-The EVE plugin can be built with a command like:
+then make sure the newly installed tool `libsuricata-config` can be
+found in your path, for example:
 ```
-CPPFLAGS=-I/home/jason/oisf/code/suricata/master/src make
+libsuricata-config --cflags
 ```
+
+Then a simple `make` should build this plugin.
 
 ## Running
 
 To run the plugin, first add the path to the plugin you just compiled to
-your `suricata.yaml`:
+your `suricata.yaml`, for example:
 ```
 plugins:
   - /home/jason/oisf/code/suricata-example-plugins/eve-file-type/eve-filetype.so
