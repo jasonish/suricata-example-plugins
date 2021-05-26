@@ -72,14 +72,14 @@ static int ThreadDeinit(void *ctx, void *thread_data)
  */
 void TemplateInit(void)
 {
-    SCPluginFileType *my_output = SCCalloc(1, sizeof(SCPluginFileType));
+    SCEveFileType *my_output = SCCalloc(1, sizeof(SCEveFileType));
     my_output->name = OUTPUT_NAME;
     my_output->Init = TemplateInitOutput;
     my_output->Deinit = TemplateClose;
     my_output->ThreadInit = ThreadInit;
     my_output->ThreadDeinit = ThreadDeinit;
     my_output->Write = TemplateWrite;
-    if (!SCPluginRegisterFileType(my_output)) {
+    if (!SCRegisterEveFileType(my_output)) {
         FatalError(SC_ERR_PLUGIN, "Failed to register filetype plugin: %s", OUTPUT_NAME);
     }
 }
