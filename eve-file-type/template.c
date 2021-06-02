@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "suricata-plugin.h"
-#include "util-mem.h"
-#include "util-debug.h"
+/* Required by suricata-plugin.h at this time. Will be fixed. */
+#include <suricata/private/queue.h>
 
-#define OUTPUT_NAME "template-filetype-plugin"
+#include <suricata/suricata-plugin.h>
+#include <suricata/output-json-filetypes.h>
+#include <suricata/private/util-debug.h>
+
+#define OUTPUT_NAME "template-filetype"
 
 typedef struct Context_ {
 } Context;
@@ -53,17 +56,16 @@ static int ThreadInit(void *ctx, int thread_id, void **thread_data)
     return 0;
 }
 
-static int ThreadDeinit(void *ctx, void *thread_data)
+static void ThreadDeinit(void *ctx, void *thread_data)
 {
     if (thread_data == NULL) {
         // Nothing to do.
-        return 0;
+        return;
     }
 
     ThreadData *tdata = thread_data;
     SCLogNotice("Deinitializing thread %d", tdata->thread_id);
     SCFree(tdata);
-    return 0;
 }
 
 /**
