@@ -6,6 +6,8 @@
 
 #include <suricata/suricata-plugin.h>
 #include <suricata/output-json-filetypes.h>
+
+#include <suricata/private/autoconf.h>
 #include <suricata/private/util-debug.h>
 
 #define OUTPUT_NAME "template-filetype"
