@@ -24,7 +24,6 @@
 #include "runmodes.h"
 #include "runmode-pfring.h"
 #include "source-pfring.h"
-/* #include "output.h" */
 
 #include "util-debug.h"
 #include "util-time.h"

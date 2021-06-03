@@ -4,7 +4,8 @@ SRCS :=		plugin.c \
 		source-pfring.c \
 		runmode-pfring.c
 
-CPPFLAGS +=	-DSURICATA_PLUGIN -DHAVE_CONFIG_H -I.
+CPPFLAGS +=	`libsuricata-config --cflags`
+CPPFLAGS +=	-DSURICATA_PLUGIN
 CPPFLAGS +=	-DHAVE_PF_RING_FLOW_OFFLOAD
 
 all:
