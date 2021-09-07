@@ -1,3 +1,20 @@
+/* Copyright (C) 2020-2021 Open Information Security Foundation
+ *
+ * You can copy, redistribute or modify this Program under the terms of
+ * the GNU General Public License version 2 as published by the Free
+ * Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -14,12 +31,6 @@ typedef struct ThreadData_ {
     int thread_id;
 } ThreadData;
 
-static int TemplateWrite(const char *buffer, int buffer_len, void *data, void *thread_data)
-{
-    SCLogNotice("Received write with thread_data %p: %s", thread_data, buffer);
-    return 0;
-}
-
 static void TemplateClose(void *data)
 {
     printf("TemplateClose\n");
@@ -31,7 +42,7 @@ static void TemplateClose(void *data)
 
 static int TemplateInitOutput(ConfNode *conf, bool threaded, void **data)
 {
-    SCLogNotice("threaded=%d", threaded);
+    SCLogNotice("Initializing template eve output plugin: threaded=%d", threaded);
     Context *context = SCCalloc(1, sizeof(Context));
     if (context == NULL) {
         return -1;
@@ -40,6 +51,13 @@ static int TemplateInitOutput(ConfNode *conf, bool threaded, void **data)
     return 0;
 }
 
+/**
+ * If in threaded mode this method will be called once for each logging thread
+ * for thread specific initialization. In regular file output this is where a
+ * file would be opened that is prefixed with the thread id. In a plugin this
+ * could be a database connection or something (but note that we don't think
+ * logging directly to a database is a good idea).
+ */
 static int ThreadInit(void *ctx, int thread_id, void **thread_data)
 {
     ThreadData *tdata = SCCalloc(1, sizeof(ThreadData));
@@ -67,19 +85,33 @@ static int ThreadDeinit(void *ctx, void *thread_data)
 }
 
 /**
+ * This method is called with formatted Eve JSON data.
+ * 
+ * \param buffer Formatted JSON buffer
+ * \param buffer_len Length of formatted JSON buffer
+ * \param data Data set in Init callback
+ * \param thread_data Data set in ThreadInit callbacl
+ */
+static int TemplateWrite(const char *buffer, int buffer_len, void *data, void *thread_data)
+{
+    SCLogNotice("Received write with thread_data %p: %s", thread_data, buffer);
+    return 0;
+}
+
+/**
  * Called by Suricata to initialize the module. This module registers
  * new file type to the JSON logger.
  */
 void TemplateInit(void)
 {
-    SCPluginFileType *my_output = SCCalloc(1, sizeof(SCPluginFileType));
+    SCEveFileType *my_output = SCCalloc(1, sizeof(SCEveFileType));
     my_output->name = OUTPUT_NAME;
     my_output->Init = TemplateInitOutput;
     my_output->Deinit = TemplateClose;
     my_output->ThreadInit = ThreadInit;
     my_output->ThreadDeinit = ThreadDeinit;
     my_output->Write = TemplateWrite;
-    if (!SCPluginRegisterFileType(my_output)) {
+    if (!SCRegisterEveFileType(my_output)) {
         FatalError(SC_ERR_PLUGIN, "Failed to register filetype plugin: %s", OUTPUT_NAME);
     }
 }
