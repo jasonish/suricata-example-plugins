@@ -1,6 +1,6 @@
 # Example Suricata Plugins
 
-## eve-file-type
+## eve-filetype
 
 This is an example plugin that implements a "file-type" for Suricata eve logs. A file type plugin receives rendered EVE records which can then be written to a file, sent to a database, etc.
 
