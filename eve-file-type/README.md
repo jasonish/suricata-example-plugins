@@ -1,39 +1,95 @@
-EVE plugin for Suricata 6.0 (and above)
-=======================================
+# EVE plugin for Suricata 6.0
 
-This is an example EVE plugin for Suricata.
+This is an example EVE plugin for Suricata Suricata 6.0.
+
+For example plugins for Suricata git master please refer to the master branch:
+https://github.com/jasonish/suricata-example-plugins.
 
 ## Building
 
-To build this plugin you will first need to build Suricata from source
-(or use git master).
+To build this plugin you will first need to build Suricata from source (or use
+git master).
 
 The EVE plugin can be built with a command like:
+
 ```
-CPPFLAGS=-I/home/jason/oisf/code/suricata/master/src make
+SURICATA_SRC=~/src/suricata-6.0.3 make
 ```
 
 ## Running
 
-To run the plugin, first add the path to the plugin you just compiled to
-your `suricata.yaml`:
+To run the plugin, first add the path to the plugin you just compiled to your
+`suricata.yaml`:
 ```
 plugins:
   - /home/jason/oisf/code/suricata-example-plugins/eve-file-type/eve-filetype.so
 ```
 
 Then add an output for the plugin:
-```
+```json
 outputs:
   - eve-log:
       enabled: yes
-      filetype: template-filetype-plugin
+      filetype: eve-template
       types:
         - dns
         - tls
         - http
+
+      # This is optional, extra configuration data that is specific to the
+      # plugin. This key must be the same name as the filetype above.
+      eve-template:
+        verbose: true
 ```
 
-In the example above we use the name specified in the plugin as the
-`filetype` and specify that all `dns`, `tls` and `http` log entries
-should be sent to the plugin.
+In the example above we use the name specified in the plugin as the `filetype`
+and specify that all `dns`, `tls` and `http` log entries should be sent to the
+plugin.
+
+## Details
+
+This plugin demonstrates a Suricata EVE output plugin (file-type). The idea of a
+Suricata EVE output plugin is to provide a file like interface for the handling
+of rendered EVE (JSON) logs. This is useful for custom destinations not builtin
+to Suricata or if the formatted JSON requires some post-processing.
+
+Note: EVE output plugins are not that useful just for reformatting the JSON
+output as the plugin does need to handling writing to a file once the file type
+has been delegated to the plugin.
+
+### Registering a Plugin
+
+All Suricata plugins make themselves known to Suricata in the way using a
+function named `SCPluginRegister` which is called after Suricata loads the
+plugin shared object file. This function must return a `SCPlugin` struct which
+contains basic information about the plugin.  For example:
+
+```c
+const SCPlugin PluginRegistration = {
+    .name = "eve-template",
+    .author = "Jason Ish",
+    .license = "GPLv2",
+    .Init = TemplateInit,
+};
+
+const SCPlugin *SCPluginRegister() {
+    return &PluginRegistration;
+}
+```
+
+### Initializing a Plugin
+
+After the plugin has been registered, the `Init` callback will be called. This
+is where the plugin will set itself up as a specific type of plugin such as an
+EVE output, or a capture method.
+
+This plugins registers itself as an EVE file type using the `SCPluginFileType`
+struct. To register as an EVE file type the following must be provided:
+
+* name: This is the name of the output which will be used in the eve filetype
+  field in `suricata.yaml` to enable this output.
+* Open: The callback called when the output is "opened".
+* Write: The callback called when an EVE record is to be "written".
+* Close: The callback called when output is to be "closed".
+
+Please see the code in `template.c` for more details about this functions.
