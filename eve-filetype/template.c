@@ -23,7 +23,8 @@ typedef struct Context_ {
  *
  * \retval 0 on success, -1 on failure.
  */
-static int TemplateOpen(ConfNode *conf, void **data) {
+static int TemplateOpen(ConfNode *conf, void **data)
+{
     printf("TemplateOpen\n");
 
     Context *context = SCCalloc(1, sizeof(Context));
@@ -51,7 +52,8 @@ static int TemplateOpen(ConfNode *conf, void **data) {
  *
  * \retval Not used.
  */
-static int TemplateWrite(const char *buffer, int buffer_len, void *data) {
+static int TemplateWrite(const char *buffer, int buffer_len, void *data)
+{
     Context *ctx = data;
     if (ctx->verbose) {
         printf("TemplateWrite: %s\n", buffer);
@@ -65,9 +67,10 @@ static int TemplateWrite(const char *buffer, int buffer_len, void *data) {
  *
  * \param data The data allocated in Open. It should be cleaned up here.
  */
-static void TemplateClose(void *data) {
+static void TemplateClose(void *data)
+{
     Context *context = data;
-    printf("TemplateClose: records written=%"PRIu64"\n", context->count);
+    printf("TemplateClose: records written=%" PRIu64 "\n", context->count);
     Context *ctx = data;
     if (ctx != NULL) {
         SCFree(ctx);
