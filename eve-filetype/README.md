@@ -1,6 +1,6 @@
-# EVE plugin for Suricata 7.0.x (git master)
+# EVE plugin for Suricata 7.0.x
 
-This is an example EVE output plugin for Suricata 7.0 (git master).
+This is an example EVE output plugin for Suricata 7.0.
 
 For an example Suricata 6.0 plugin see
 https://github.com/jasonish/suricata-example-plugins/tree/6.0/eve-filetype.

@@ -147,7 +147,7 @@ static int ThreadInit(void *ctx, int thread_id, void **thread_data)
 {
     ThreadData *tdata = SCCalloc(1, sizeof(ThreadData));
     if (tdata == NULL) {
-        SCLogError(SC_ERR_MEM_ALLOC, "Failed to allocate thread data");
+        SCLogError("Failed to allocate thread data");
         return -1;
     }
     tdata->thread_id = thread_id;
@@ -220,7 +220,7 @@ void TemplateInit(void)
     my_output->ThreadDeinit = ThreadDeinit;
     my_output->Write = TemplateWrite;
     if (!SCRegisterEveFileType(my_output)) {
-        FatalError(SC_ERR_PLUGIN, "Failed to register filetype plugin: %s", OUTPUT_NAME);
+        FatalError("Failed to register filetype plugin: %s", OUTPUT_NAME);
     }
 }
 
