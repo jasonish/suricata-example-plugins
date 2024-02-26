@@ -21,7 +21,7 @@ void SCPluginInit(void)
     SCLogNotice("SCPluginInit");
     SCCapturePlugin *plugin = SCCalloc(1, sizeof(SCCapturePlugin));
     if (plugin == NULL) {
-        FatalError(SC_ERR_MEM_ALLOC, "Failed to allocate memory for capture plugin");
+        FatalError("Failed to allocate memory for capture plugin");
     }
     plugin->name = source_name;
     plugin->Init = InitCapturePlugin;
