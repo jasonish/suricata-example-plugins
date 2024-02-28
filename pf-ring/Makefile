@@ -13,7 +13,7 @@ CPPFLAGS +=	-DHAVE_PF_RING_FLOW_OFFLOAD
 CPPFLAGS +=    "-D__SCFILENAME__=\"$(*F)\""
 
 all:
-	$(CC) -fPIC $(CPPFLAGS) -o $(NAME).so -shared $(SRCS)
+	$(CC) -fPIC $(CPPFLAGS) -o $(NAME).so -shared $(SRCS) -lpfring
 
 clean:
 	rm -f *.so *~
