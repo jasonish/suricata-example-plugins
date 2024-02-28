@@ -16,13 +16,13 @@
  */
 
 #include "suricata-common.h"
+#include "runmode-pfring.h"
 #include "suricata-plugin.h"
 
 #include "flow.h"
 #include "tm-threads.h"
 #include "conf.h"
 #include "runmodes.h"
-#include "runmode-pfring.h"
 #include "source-pfring.h"
 #include "suricata.h"
 #include "util-bpf.h"
@@ -242,7 +242,9 @@ static void *ParsePfringPluginConfig(const char *iface)
         if_default = NULL;
     }
 
-    if (ConfGetChildValueWithDefault(if_root, if_default, "threads", &threadsstr) != 1) {
+    if (active_runmode && !strcmp("single", active_runmode)) {
+        pfconf->threads = 1;
+    } else if (ConfGetChildValueWithDefault(if_root, if_default, "threads", &threadsstr) != 1) {
         pfconf->threads = 1;
     } else if (threadsstr != NULL) {
         if (strcmp(threadsstr, "auto") == 0) {
