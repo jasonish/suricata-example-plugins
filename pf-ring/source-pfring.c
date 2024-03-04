@@ -28,14 +28,11 @@
  * \todo Allow ring options such as snaplen etc, to be user configurable.
  */
 
-//#undef ENABLE_PROFILING
-
 #include "suricata-common.h"
 #include "suricata-plugin.h"
 
 #include "suricata.h"
 #include "conf.h"
-#include "flow.h"
 #include "decode.h"
 #include "packet-queue.h"
 #include "threads.h"
@@ -46,9 +43,11 @@
 #include "util-debug.h"
 #include "util-checksum.h"
 #include "util-privs.h"
+#include "util-datalink.h"
 #include "util-device.h"
 #include "util-host-info.h"
 #include "runmodes.h"
+#include "util-profiling.h"
 
 TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot);
 TmEcode PfringPluginBreakLoop(ThreadVars *tv, void *data);
@@ -60,7 +59,7 @@ TmEcode DecodePfringPluginThreadInit(ThreadVars *, const void *, void **);
 TmEcode DecodePfringPlugin(ThreadVars *, Packet *, void *);
 TmEcode DecodePfringPluginThreadDeinit(ThreadVars *tv, void *data);
 
-extern int max_pending_packets;
+extern uint16_t max_pending_packets;
 
 #include <pfring.h>
 
@@ -110,7 +109,7 @@ struct PfringPluginThreadVars_
 
     char *bpf_filter;
 
-    ChecksumValidationMode checksum_mode;
+     ChecksumValidationMode checksum_mode;
 
     bool vlan_hdr_warned;
 };
@@ -128,7 +127,6 @@ void TmModuleReceivePfringPluginRegister(int slot)
     tmm_modules[slot].PktAcqBreakLoop = PfringPluginBreakLoop;
     tmm_modules[slot].ThreadExitPrintStats = ReceivePfringPluginThreadExitStats;
     tmm_modules[slot].ThreadDeinit = ReceivePfringPluginThreadDeinit;
-    tmm_modules[slot].RegisterTests = NULL;
     tmm_modules[slot].flags = TM_FLAG_RECEIVE_TM;
 }
 
@@ -143,7 +141,6 @@ void TmModuleDecodePfringPluginRegister(int slot)
     tmm_modules[slot].Func = DecodePfringPlugin;
     tmm_modules[slot].ThreadExitPrintStats = NULL;
     tmm_modules[slot].ThreadDeinit = DecodePfringPluginThreadDeinit;
-    tmm_modules[slot].RegisterTests = NULL;
     tmm_modules[slot].flags = TM_FLAG_DECODE_TM;
 }
 
@@ -192,11 +189,12 @@ static inline void PfringProcessPacket(void *user, struct pfring_pkthdr *h, Pack
 
     /* PF_RING may fail to set timestamp */
     if (h->ts.tv_sec == 0) {
-        gettimeofday((struct timeval *)&h->ts, NULL);
+        struct timeval tmp_ts;
+        gettimeofday(&tmp_ts, NULL);
+        h->ts = tmp_ts;
     }
 
-    p->ts.tv_sec = h->ts.tv_sec;
-    p->ts.tv_usec = h->ts.tv_usec;
+    p->ts = SCTIME_FROM_TIMEVAL(&h->ts);
 
     /* PF_RING all packets are marked as a link type of ethernet
      * so that is what we do here. */
@@ -223,8 +221,8 @@ static inline void PfringProcessPacket(void *user, struct pfring_pkthdr *h, Pack
         p->vlan_idx = 1;
 
         if (!ptv->vlan_hdr_warned) {
-            SCLogWarning(SC_ERR_PF_RING_VLAN, "no VLAN header in the raw "
-                    "packet. See #2355.");
+            SCLogWarning("no VLAN header in the raw "
+                         "packet. See ticket #2355.");
             ptv->vlan_hdr_warned = true;
         }
     }
@@ -292,13 +290,13 @@ static int PfringBypassCallback(Packet *p)
 #endif
 
 /**
- * \brief Recieves packets from an interface via libpfring.
+ * \brief Receives packets from an interface via libpfring.
  *
- *  This function recieves packets from an interface and passes
+ *  This function receives packets from an interface and passes
  *  the packet on to the pfring callback function.
  *
  * \param tv pointer to ThreadVars
- * \param data pointer that gets cast into PfringPluginThreadVars for ptv
+ * \param data pointer that gets cast into PfringThreadVars for ptv
  * \param slot slot containing task information
  * \retval TM_ECODE_OK on success
  * \retval TM_ECODE_FAILED on failure
@@ -311,7 +309,7 @@ TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot)
     Packet *p = NULL;
     struct pfring_pkthdr hdr;
     TmSlot *s = (TmSlot *)slot;
-    time_t last_dump = 0;
+    SCTime_t last_dump = SCTIME_INITIALIZER;
     u_int buffer_size;
     u_char *pkt_buffer;
 
@@ -321,9 +319,13 @@ TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot)
      * the threads have called pfring_set_cluster(). */
     int rc = pfring_enable_ring(ptv->pd);
     if (rc != 0) {
-        SCLogError(SC_ERR_PF_RING_OPEN, "pfring_enable_ring failed returned %d ", rc);
+        SCLogError("pfring_enable_ring failed returned %d ", rc);
         SCReturnInt(TM_ECODE_FAILED);
     }
+
+    // Indicate that the thread is actually running its application level code (i.e., it can poll
+    // packets)
+    TmThreadsSetFlag(tv, THV_RUNNING);
 
     while(1) {
         if (suricata_ctl_flags & SURICATA_STOP) {
@@ -359,14 +361,12 @@ TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot)
         if (likely(r == 1)) {
             /* profiling started before blocking pfring_recv call, so
              * reset it here */
-#ifdef ENABLE_PROFILING
             PACKET_PROFILING_RESTART(p);
-#endif
 
 #ifdef HAVE_PF_RING_FLOW_OFFLOAD
             if (ptv->flags & PFRING_FLAGS_BYPASS) {
+		PfringPluginPacketVars *vars = (PfringPluginPacketVars *)&p->plugin_v;
                 /* pkt hash contains the flow id in this configuration */
-                PfringPluginPacketVars *vars = (PfringPluginPacketVars *)&p->plugin_v;
                 vars->flow_id = hdr.extended_hdr.pkt_hash;
                 vars->ptv = ptv;
                 p->BypassPacketsFlow = PfringBypassCallback;
@@ -385,12 +385,13 @@ TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot)
             }
 
             /* Trigger one dump of stats every second */
-            if (p->ts.tv_sec != last_dump) {
+            if (SCTIME_CMP_NEQ(p->ts, last_dump)) {
                 PfringDumpCounters(ptv);
-                last_dump = p->ts.tv_sec;
+                last_dump = p->ts;
             }
         } else if (unlikely(r == 0)) {
             if (suricata_ctl_flags & SURICATA_STOP) {
+                TmqhOutputPacketpool(ptv->tv, p);
                 SCReturnInt(TM_ECODE_OK);
             }
 
@@ -398,7 +399,7 @@ TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot)
             TmThreadsCaptureHandleTimeout(tv, p);
 
         } else {
-            SCLogError(SC_ERR_PF_RING_RECV,"pfring_recv error  %" PRId32 "", r);
+            SCLogError("pfring_recv error  %" PRId32 "", r);
             TmqhOutputPacketpool(ptv->tv, p);
             SCReturnInt(TM_ECODE_FAILED);
         }
@@ -415,7 +416,7 @@ TmEcode ReceivePfringPluginLoop(ThreadVars *tv, void *data, void *slot)
  * execution, exiting the packet capture loop.
  *
  * \param tv pointer to ThreadVars
- * \param data pointer that gets cast into PfringPluginThreadVars for ptv
+ * \param data pointer that gets cast into PfringThreadVars for ptv
  * \retval TM_ECODE_OK on success
  * \retval TM_ECODE_FAILED on failure
  */
@@ -434,9 +435,9 @@ TmEcode PfringPluginBreakLoop(ThreadVars *tv, void *data)
 }
 
 /**
- * \brief Init function for RecievePfring.
+ * \brief Init function for ReceivePfring.
  *
- * This is a setup function for recieving packets
+ * This is a setup function for receiving packets
  * via libpfring.
  *
  * \param tv pointer to ThreadVars
@@ -458,26 +459,26 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
     if (pfconf == NULL)
         return TM_ECODE_FAILED;
 
-    PfringPluginThreadVars *ptv = SCMalloc(sizeof(PfringPluginThreadVars));
+    PfringThreadVars *ptv = SCMalloc(sizeof(PfringThreadVars));
     if (unlikely(ptv == NULL)) {
         pfconf->DerefFunc(pfconf);
         return TM_ECODE_FAILED;
     }
-    memset(ptv, 0, sizeof(PfringPluginThreadVars));
+    memset(ptv, 0, sizeof(PfringThreadVars));
 
     ptv->tv = tv;
     ptv->threads = 1;
 
     ptv->interface = SCStrdup(pfconf->iface);
     if (unlikely(ptv->interface == NULL)) {
-        SCLogError(SC_ERR_MEM_ALLOC, "Unable to allocate device string");
+        SCLogError("Unable to allocate device string");
         SCFree(ptv);
         SCReturnInt(TM_ECODE_FAILED);
     }
 
     ptv->livedev = LiveGetDevice(pfconf->iface);
     if (ptv->livedev == NULL) {
-        SCLogError(SC_ERR_INVALID_VALUE, "Unable to find Live device");
+        SCLogError("Unable to find Live device");
         SCFree(ptv);
         SCReturnInt(TM_ECODE_FAILED);
     }
@@ -499,8 +500,7 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
 
     if (ptv->checksum_mode == CHECKSUM_VALIDATION_RXONLY) {
         if (strncmp(ptv->interface, "dna", 3) == 0) {
-            SCLogWarning(SC_ERR_INVALID_VALUE,
-                         "Can't use rxonly checksum-checks on DNA interface,"
+            SCLogWarning("Can't use rxonly checksum-checks on DNA interface,"
                          " resetting to auto");
             ptv->checksum_mode = CHECKSUM_VALIDATION_AUTO;
         } else {
@@ -517,10 +517,9 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
 
     ptv->pd = pfring_open(ptv->interface, (uint32_t)default_packet_size, opflag);
     if (ptv->pd == NULL) {
-        SCLogError(SC_ERR_PF_RING_OPEN,"Failed to open %s: pfring_open error."
-                " Check if %s exists and pf_ring module is loaded.",
-                ptv->interface,
-                ptv->interface);
+        SCLogError("Failed to open %s: pfring_open error."
+                   " Check if %s exists and pf_ring module is loaded.",
+                ptv->interface, ptv->interface);
         pfconf->DerefFunc(pfconf);
         SCFree(ptv);
         return TM_ECODE_FAILED;
@@ -543,8 +542,9 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
         rc = pfring_set_cluster(ptv->pd, ptv->cluster_id, ptv->ctype);
 
         if (rc != 0) {
-            SCLogError(SC_ERR_PF_RING_SET_CLUSTER_FAILED, "pfring_set_cluster "
-                    "returned %d for cluster-id: %d", rc, ptv->cluster_id);
+            SCLogError("pfring_set_cluster "
+                       "returned %d for cluster-id: %d",
+                    rc, ptv->cluster_id);
             if (rc != PF_RING_ERROR_NOT_SUPPORTED || (pfconf->flags & PFRING_CONF_FLAGS_CLUSTER)) {
                 /* cluster is mandatory as explicitly specified in the configuration */
                 pfconf->DerefFunc(pfconf);
@@ -566,15 +566,14 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
     if (pfconf->bpf_filter) {
         ptv->bpf_filter = SCStrdup(pfconf->bpf_filter);
         if (unlikely(ptv->bpf_filter == NULL)) {
-            SCLogError(SC_ERR_MEM_ALLOC, "Set PF_RING bpf filter failed.");
+            SCLogError("Set PF_RING bpf filter failed.");
         } else {
             SCMutexLock(&pfring_bpf_set_filter_lock);
             rc = pfring_set_bpf_filter(ptv->pd, ptv->bpf_filter);
             SCMutexUnlock(&pfring_bpf_set_filter_lock);
 
             if (rc < 0) {
-                SCLogError(SC_ERR_INVALID_VALUE, "Failed to compile BPF \"%s\"",
-                           ptv->bpf_filter);
+                SCLogError("Failed to compile BPF \"%s\"", ptv->bpf_filter);
                 return TM_ECODE_FAILED;
             }
         }
@@ -590,7 +589,7 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
 #endif
 
     /* If kernel is older than 3.0, VLAN is not stripped so we don't
-     * get the info from packt extended header but we will use a standard
+     * get the info from packet extended header but we will use a standard
      * parsing */
     ptv->vlan_in_ext_header = 1;
     if (! SCKernelVersionIsAtLeast(3, 0)) {
@@ -605,12 +604,15 @@ TmEcode ReceivePfringPluginThreadInit(ThreadVars *tv, const void *initdata, void
         rc = pfring_set_cluster(ptv->pd, ptv->cluster_id, CLUSTER_FLOW_5_TUPLE);
 
         if (rc != 0) {
-            SCLogError(SC_ERR_PF_RING_SET_CLUSTER_FAILED, "pfring_set_cluster "
-                    "returned %d for cluster-id: %d", rc, ptv->cluster_id);
+            SCLogError("pfring_set_cluster "
+                       "returned %d for cluster-id: %d",
+                    rc, ptv->cluster_id);
             pfconf->DerefFunc(pfconf);
             return TM_ECODE_FAILED;
         }
     }
+
+    DatalinkSetGlobalType(LINKTYPE_ETHERNET);
 
     *data = (void *)ptv;
     pfconf->DerefFunc(pfconf);
@@ -650,7 +652,6 @@ void ReceivePfringPluginThreadExitStats(ThreadVars *tv, void *data)
  */
 TmEcode ReceivePfringPluginThreadDeinit(ThreadVars *tv, void *data)
 {
-    SCLogNotice("...");
     PfringPluginThreadVars *ptv = (PfringPluginThreadVars *)data;
     if (ptv->interface)
         SCFree(ptv->interface);
@@ -662,6 +663,7 @@ TmEcode ReceivePfringPluginThreadDeinit(ThreadVars *tv, void *data)
     }
 
     pfring_close(ptv->pd);
+    SCFree(ptv);
     return TM_ECODE_OK;
 }
 
@@ -706,7 +708,7 @@ TmEcode DecodePfringPlugin(ThreadVars *tv, Packet *p, void *data)
  * \brief This an Init function for DecodePfring
  *
  * \param tv pointer to ThreadVars
- * \param initdata pointer to initilization data.
+ * \param initdata pointer to initialization data.
  * \param data pointer that gets cast into PfringPluginThreadVars for ptv
  * \retval TM_ECODE_OK is returned on success
  * \retval TM_ECODE_FAILED is returned on error

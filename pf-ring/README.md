@@ -1,4 +1,4 @@
-# PF_RING Plugin for Suricata 6.0beta1+
+# PF_RING Plugin for Suricata 7.0.x
 
 This is an example capture plugin for Suricata 6.0beta1.
 
