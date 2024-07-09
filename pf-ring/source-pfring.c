@@ -263,12 +263,12 @@ static int PfringBypassCallback(Packet *p)
     hw_filtering_rule r;
 
     /* Only bypass TCP and UDP */
-    if (!(PKT_IS_TCP(p) || PKT_IS_UDP(p))) {
+    if (!(PacketIsTCP(p) || PacketIsUDP(p))) {
         return 0;
     }
 
     /* Bypassing tunneled packets is currently not supported */
-    if (IS_TUNNEL_PKT(p)) {
+    if (PacketIsTunnel(p)) {
         return 0;
     }
 
